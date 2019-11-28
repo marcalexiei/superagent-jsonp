@@ -7,26 +7,27 @@
     "superagent": ">=1.4"
   },
   "devDependencies": {
-    "babel-polyfill": "^6.9.0",
-    "babel-preset-env": "^1.6.1",
-    "babel-register": "^6.9.0",
-    "chai": "^3.3.0",
-    "eslint": "^4.11.0",
-    "eslint-config-airbnb-base": "^12.1.0",
-    "eslint-plugin-import": "^2.8.0",
-    "gulp": "^3.9.0",
-    "gulp-babel": "^6.1.2",
-    "gulp-eslint": "^4.0.0",
-    "jsdom": "^9.2.1",
-    "mocha": "^4.0.1",
+    "@babel/core": "^7.7.4",
+    "@babel/polyfill": "^7.7.0",
+    "@babel/preset-env": "^7.7.4",
+    "@babel/register": "^7.7.4",
+    "chai": "^4.2.0",
+    "eslint": "^6.7.1",
+    "eslint-config-airbnb-base": "^14.0.0",
+    "eslint-plugin-import": "^2.18.0",
+    "gulp": "^4.0.2",
+    "gulp-babel": "^8.0.0",
+    "gulp-eslint": "^6.0.0",
+    "jsdom": "^15.2.1",
+    "mocha": "^6.2.2",
     "mocha-babel": "^3.0.0",
-    "sinon": "^1.17.4",
-    "sinon-chai": "^2.8.0"
+    "sinon": "^7.5.0",
+    "sinon-chai": "^3.3.0"
   },
   "scripts": {
     "build": "gulp",
     "lint": "eslint --fix src/*.js test/*.js",
-    "test": "gulp && mocha --require babel-register test/*_spec.js"
+    "test": "gulp && mocha  --require @babel/register test/*_spec.js"
   },
   "repository": {
     "type": "git",

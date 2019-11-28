@@ -1,46 +1,75 @@
-const removeCallback = function ({ script, callbackName, timeout }) {
-  if (script && script.parentNode) script.parentNode.removeChild(script);
+class SuperagentJSONP {
+  constructor(request, config = {}, callbackFunction) {
+    this.callbackParam = config.callbackParam || 'callback';
+    this.callbackName = config.callbackName || `superagentCallback${new Date().valueOf() + parseInt(Math.random() * 1000, 10)}`;
+    this.timeout = config.timeout || 1000;
+    this.callbackFunction = callbackFunction;
 
-  delete window[callbackName];
+    this.timeoutTask = setTimeout(() => {
+      const timeoutError = new Error('timeout');
+      this.errorWrapper(timeoutError);
+      console.info('settimeout');
+    }, this.timeout);
 
-  clearTimeout(timeout); // clear timeout (for onerror event listener)
-};
+    window[this.callbackName] = this.callbackWrapper.bind(this);
+
+    // eslint-disable-next-line no-underscore-dangle
+    request._query.push(`${encodeURIComponent(this.callbackParam)}=${encodeURIComponent(this.callbackName)}`);
+    // eslint-disable-next-line no-underscore-dangle
+    const queryString = request._query.join('&');
+
+    const script = document.createElement('script');
+    {
+      const separator = (request.url.indexOf('?') > -1) ? '&' : '?';
+      const url = request.url + separator + queryString;
+
+      script.src = url;
+
+      // Handle script load error #27
+      script.onerror = (e) => {
+        console.info('onerror');
+        this.errorWrapper(e);
+      };
+    }
+
+    document.head.appendChild(script);
+    this.script = script;
+
+    this.request = request;
+    request.superagentJSONP = this;
+  }
+
+  callbackWrapper(body) {
+    const err = null;
+    const res = { body };
+
+    this.removeCallback();
+
+    this.callbackFunction.call(this.request, err, res);
+  }
+
+  errorWrapper(error) {
+    const err = error || new Error('404 Not found');
+
+    this.callbackFunction.call(this.request, err, null);
+  }
+
+  removeCallback() {
+    clearTimeout(this.timeoutTask); // clear timeout (for onerror event listener)
+
+    if (this.script && this.script.parentNode) {
+      this.script.parentNode.removeChild(this.script);
+    }
+
+    delete window[this.callbackName];
+  }
+}
 
 const jsonp = function (requestOrConfig) {
-  const end = function (config = {}) {
+  const end = function (pluginConfig = {}) {
     return function handler(callback) {
-      const callbackParam = config.callbackParam || 'callback';
-      const callbackName = config.callbackName || `superagentCallback${new Date().valueOf() + parseInt(Math.random() * 1000, 10)}`;
-      const timeoutLimit = config.timeout || 1000;
-
-      const timeout = setTimeout(jsonp.errorWrapper.bind(this), timeoutLimit);
-
-      this._jsonp = {
-        callbackName,
-        callback,
-        timeout,
-      };
-
-      window[callbackName] = jsonp.callbackWrapper.bind(this);
-
-      this._query.push(`${encodeURIComponent(callbackParam)}=${encodeURIComponent(callbackName)}`);
-      const queryString = this._query.join('&');
-
-      const s = document.createElement('script');
-      {
-        const separator = (this.url.indexOf('?') > -1) ? '&' : '?';
-        const url = this.url + separator + queryString;
-
-        s.src = url;
-
-        // Handle script load error #27
-        s.onerror = (e) => {
-          jsonp.errorWrapper.call(this, e);
-        };
-      }
-
-      document.head.appendChild(s);
-      this._jsonp.script = s;
+      // eslint-disable-next-line no-unused-vars
+      const plugin = new SuperagentJSONP(this, pluginConfig, callback);
 
       return this;
     };
@@ -60,26 +89,6 @@ const jsonp = function (requestOrConfig) {
   }
 
   return reqFunc;
-};
-
-jsonp.callbackWrapper = function callbackWrapper(body) {
-  const err = null;
-  const res = { body };
-
-  removeCallback(this._jsonp);
-
-  this._jsonp.callback.call(this, err, res);
-};
-
-jsonp.errorWrapper = function errorWrapper(error) {
-  let err = new Error('404 Not found');
-  if (error && error instanceof Event && error.type === 'error') {
-    err = new Error('Connection issue');
-  }
-
-  removeCallback(this._jsonp);
-
-  this._jsonp.callback.call(this, err, null);
 };
 
 // Prefer node/browserify style requires

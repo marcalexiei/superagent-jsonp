@@ -1,91 +1,93 @@
 // TODO: Move all of this setup into test helper
 import chai, { expect } from 'chai';
 import sinonChai from 'sinon-chai';
-import { jsdom } from 'jsdom';
+import { JSDOM } from 'jsdom';
 import sinon from 'sinon';
+
 import jsonp from '../src/superagent-jsonp';
 
 chai.use(sinonChai);
 
-const generateDOM = () => {
+function generateDOM() {
+  const myPage = new JSDOM('<html><body></body></html>');
+  global.window = myPage.window;
+  global.document = myPage.window.document;
   global.navigator = {
     userAgent: 'node.js',
   };
+}
 
-  global.window = jsdom('<html><body></body></html>');
-  global.document = window;
-};
-
-const tearDownDOM = () => {
-  delete global.navigator;
-  delete global.document;
+function tearDownDOM() {
   delete global.window;
-};
+  delete global.document;
+  delete global.navigator;
+}
 
-describe('SuperagentJSONP', () => {
-  let sandbox;
-  let clock;
-
-  beforeEach(() => {
-    sandbox = sinon.sandbox.create();
-    clock = sinon.useFakeTimers();
+describe('SuperagentJSONP', function () {
+  const sandbox = sinon.createSandbox({
+    properties: ['spy', 'clock'],
+    useFakeTimers: true,
+    useFakeServer: true,
   });
 
-  afterEach(() => {
+  afterEach(function () {
     sandbox.restore();
   });
 
-  describe('#jsonp', () => {
-    const end = 'Hello ';
-    const requestMock = { end };
+  const end = 'Hello ';
+  const requestMock = { end };
 
-    context('when window is not defined', () => {
-      it('does nothing', () => {
-        expect(jsonp({})('hello')).to.eq('hello');
-      });
+  context('when window is not defined', function () {
+    it('does nothing', function () {
+      expect(jsonp({})('hello')).to.eq('hello');
     });
+  });
 
-    context('when window is defined', () => {
-      beforeEach(generateDOM);
-      afterEach(tearDownDOM);
+  context('when window is defined', function () {
+    beforeEach(generateDOM);
+    afterEach(tearDownDOM);
 
-      it('sets up the request object', () => {
-        const newRequest = jsonp({})(requestMock);
-        expect(newRequest.end).not.to.eq(end);
-        expect(typeof newRequest.end).to.eq('function');
-      });
+    it('sets up the request object', function () {
+      const newRequest = jsonp({})(requestMock);
+      expect(newRequest.end).not.to.eq(end);
+      expect(typeof newRequest.end).to.eq('function');
     });
+  });
 
-    context('when the url returns a 404', () => {
-      const superagentMock = {
+  context('when the url returns a 404', function () {
+    const createRequestMock = function () {
+      return {
         _query: [],
         url: 'http://test.com',
       };
+    };
 
-      beforeEach(generateDOM);
-      afterEach(tearDownDOM);
+    beforeEach(generateDOM);
+    afterEach(tearDownDOM);
 
-      it('calls the error handler', () => {
-        const callbackSpy = sandbox.spy();
-        sinon.spy(jsonp, 'errorWrapper');
+    it('calls the error handler', function () {
+      const testErrorCb = function testErrorCb() {
+        console.info('argh');
+      };
 
-        jsonp({ timeout: 100 })(superagentMock).end(callbackSpy);
+      const spy = sinon.spy(testErrorCb);
 
-        clock.tick(110);
+      jsonp({ timeout: 100 })(createRequestMock()).end(testErrorCb);
 
-        expect(jsonp.errorWrapper).to.have.been.called; // eslint-disable-line no-unused-expressions
-        expect(callbackSpy).to.have.been.calledWith(new Error('404 NotFound'), null);
-      });
+      sandbox.clock.tick(110);
 
-      it('script and window callback are correctly removed', () => {
-        const callbackName = 'testErrorCb';
-        jsonp({ timeout: 10, callbackName })(superagentMock).end(() => {});
+      expect(spy).to.have.been.called; // eslint-disable-line no-unused-expressions
+      expect(spy).to.have.been.calledWith(new Error('404 NotFound'), null);
+    });
 
-        clock.tick(15);
+    it('script and window callback are correctly removed', function () {
+      const callbackName = 'testErrorCb';
+      jsonp({ timeout: 100, callbackName })(createRequestMock()).end(() => {});
 
-        expect(typeof window[callbackName]).to.eq('undefined');
-        expect(document.querySelectorAll('script').length).to.eq(0);
-      });
+      sandbox.clock.tick(150);
+
+      expect(typeof window[callbackName]).to.eq('undefined');
+      expect(document.querySelectorAll('script').length).to.eq(0);
     });
   });
 });
